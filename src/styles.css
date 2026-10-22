@@ -1,0 +1,280 @@
+/* Values taken from the Figma file "project", frames sign_in & sign_up. */
+:root {
+  --color-primary: #045654;
+  --color-primary-hover: #03413f;
+  --color-disabled: #6e6f73;
+  --color-backdrop: #7f7f7f;
+  --color-card: #f1f1f1;
+  --color-input: #f8f8f8;
+  --color-border: #abaab1;
+  --color-placeholder: #999999;
+  --color-text: #000000;
+  --color-accent: #ff5a3c;
+  --color-error: #ff4d4f;
+
+  --font-display: 'Montserrat Alternates', sans-serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--color-text);
+  background: var(--color-backdrop);
+}
+
+/* Layout */
+.auth-backdrop {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  background: var(--color-backdrop);
+}
+
+.auth-card {
+  position: relative;
+  width: 100%;
+  max-width: 720px;
+  padding: 80px 100px;
+  border-radius: 12px;
+  background: var(--color-card);
+}
+
+.auth-close {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 50%;
+  background: #ffffff;
+  color: #5c5c5c;
+  cursor: pointer;
+}
+
+.auth-close:hover {
+  color: var(--color-text);
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 38px;
+}
+
+/* Header */
+.auth-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.logo {
+  color: var(--color-primary);
+  margin-bottom: 8px;
+}
+
+.auth-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 36px;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.auth-subtitle {
+  margin: 8px 0 0;
+  font-family: var(--font-display);
+  font-size: 24px;
+  line-height: 1.2;
+}
+
+.auth-subtitle--small {
+  margin-top: 16px;
+  font-size: 16px;
+}
+
+/* Fields */
+.auth-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.auth-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field-label {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.field-control {
+  display: flex;
+  align-items: center;
+  height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--color-border);
+  border-radius: 28px;
+  background: var(--color-input);
+}
+
+.field-control:focus-within {
+  border-color: var(--color-primary);
+}
+
+.field-control--error,
+.field-control--error:focus-within {
+  border-color: var(--color-error);
+}
+
+.field-control--error .field-input {
+  color: var(--color-error);
+}
+
+.field-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font: inherit;
+  color: var(--color-text);
+}
+
+.field-input::placeholder {
+  color: var(--color-placeholder);
+}
+
+.field-eye {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  margin-left: 8px;
+  border: none;
+  background: none;
+  color: #5c5c5c;
+  cursor: pointer;
+}
+
+.field-error {
+  margin: 0;
+  font-size: 14px;
+  color: var(--color-error);
+}
+
+.auth-forgot {
+  align-self: flex-end;
+  color: var(--color-text);
+  text-decoration: underline;
+}
+
+/* Actions */
+.auth-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.btn {
+  height: 48px;
+  border: none;
+  border-radius: 999px;
+  background: var(--color-primary);
+  color: #ffffff;
+  font: inherit;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--color-primary-hover);
+}
+
+.btn:disabled {
+  background: var(--color-disabled);
+  color: #a9a9ad;
+  cursor: not-allowed;
+}
+
+.auth-switch {
+  margin: 0;
+  text-align: center;
+}
+
+.auth-switch a {
+  color: var(--color-accent);
+}
+
+/* Tablet (Figma "tab", 768px frame): card 688px, 40px side margins, 80px padding */
+@media (max-width: 768px) {
+  .auth-backdrop {
+    padding: 40px;
+  }
+
+  .auth-card {
+    padding: 80px;
+  }
+}
+
+/* Phone (Figma 375px frame): card 335px, 20px side margins */
+@media (max-width: 480px) {
+  .auth-backdrop {
+    padding: 20px;
+  }
+
+  .auth-card {
+    padding: 60px 20px 40px;
+  }
+
+  .auth-form {
+    gap: 32px;
+  }
+
+  .auth-close {
+    top: 16px;
+    right: 16px;
+  }
+
+  .auth-title {
+    font-size: 20px;
+  }
+
+  .auth-subtitle {
+    margin-top: 4px;
+    font-size: 15px;
+  }
+
+  .auth-subtitle--small {
+    margin-top: 12px;
+    font-size: 14px;
+  }
+
+  .auth-row {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+}
