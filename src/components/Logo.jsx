@@ -1,4 +1,3 @@
-// Owl mark from the Figma design, redrawn as inline SVG.
 export default function Logo({ size = 64 }) {
   return (
     <svg
