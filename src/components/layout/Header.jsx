@@ -1,22 +1,26 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import BrandLogo from './BrandLogo.jsx';
-import { CATEGORIES, NAV_LINKS } from '../../data/shop.js';
+import { NAV_LINKS } from '../../data/shop.js';
+import useAuth from '../../useAuth.js';
+import useCategories from '../../useCategories.js';
 import { CartIcon, ChevronRight, HeartIcon, MenuIcon, PhoneIcon, SearchIcon, UserIcon } from '../icons.jsx';
 
 function CatalogMenu({ onClose }) {
-  const [active, setActive] = useState(CATEGORIES[1]);
+  const categories = useCategories();
+  const [activeSlug, setActiveSlug] = useState(null);
+  const active = categories.find((c) => c.slug === activeSlug) ?? categories[0];
 
   return (
     <div className="catalog-menu" role="menu">
       <ul className="catalog-menu-list">
-        {CATEGORIES.map((cat) => (
+        {categories.map((cat) => (
           <li key={cat.slug}>
             <Link
               to={`/catalog/${cat.slug}`}
-              className={`catalog-menu-item${active.slug === cat.slug ? ' is-active' : ''}`}
-              onMouseEnter={() => setActive(cat)}
-              onFocus={() => setActive(cat)}
+              className={`catalog-menu-item${active?.slug === cat.slug ? ' is-active' : ''}`}
+              onMouseEnter={() => setActiveSlug(cat.slug)}
+              onFocus={() => setActiveSlug(cat.slug)}
               onClick={onClose}
             >
               {cat.name}
@@ -25,7 +29,7 @@ function CatalogMenu({ onClose }) {
           </li>
         ))}
       </ul>
-      {active.subcategories.length > 0 && (
+      {active?.subcategories.length > 0 && (
         <ul className="catalog-menu-sub">
           {active.subcategories.map((sub) => (
             <li key={sub}>
@@ -45,6 +49,7 @@ export default function Header({ cartCount = 0 }) {
   const [query, setQuery] = useState('');
   const menuRef = useRef(null);
   const navigate = useNavigate();
+  const loggedIn = useAuth();
 
   useEffect(() => {
     if (!menuOpen) return undefined;
@@ -104,7 +109,7 @@ export default function Header({ cartCount = 0 }) {
         </div>
 
         <div className="header-actions">
-          <Link to="/sign-in" className="icon-btn" aria-label="Особистий кабінет">
+          <Link to={loggedIn ? '/profile' : '/sign-in'} className="icon-btn" aria-label="Особистий кабінет">
             <UserIcon />
           </Link>
           <button type="button" className="icon-btn" aria-label="Обране">

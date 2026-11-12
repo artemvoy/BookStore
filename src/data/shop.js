@@ -1,4 +1,5 @@
-// Mock data for the storefront until the backend exists.
+// Static storefront content. Books come from the API; CATEGORIES is the fallback when it is unreachable.
+import assetUrl from '../assetUrl.js';
 
 export const CATEGORIES = [
   { slug: 'new', name: 'Новинки', subcategories: [] },
@@ -43,44 +44,10 @@ export const NAV_LINKS = [
   'Серії',
 ];
 
-// The design uses one placeholder book everywhere; real items will come from the API.
-const PUNK_57 = {
-  title: 'Панк 57',
-  author: 'Пенелопа Дуглас',
-  rating: '4.6',
-  reviews: 223,
-  oldPrice: 420,
-  price: 380,
-  image: '/books/punk-57.png',
-  cover: ['#120a1a', '#ff2e8a'],
-};
-
-export const BOOKS = Array.from({ length: 36 }, (_, i) => ({ id: i + 1, ...PUNK_57 }));
-
 // Book drawn on the author promo banner (not a product card).
 export const BANNER_BOOKS = {
-  author: { title: 'Останній лист', author: 'Ребекка Яррос', image: '/books/last-letter.png' },
+  author: { title: 'Останній лист', author: 'Ребекка Яррос', image: assetUrl('/books/last-letter.png') },
 };
-
-// Sidebar filter options as listed on the catalog/desktop frame.
-export const FILTERS = [
-  { key: 'format', title: 'Формат', options: ['Електронні книги', 'Паперові книги'] },
-  { key: 'language', title: 'Мова', options: ['Українська', 'Англійська'] },
-  {
-    key: 'author',
-    title: 'Автор',
-    searchable: true,
-    options: ['Джоан Ролінґ', 'Ерін Гантер', 'Рік Ріордан', 'Люсі-Мод Монтгомері', 'Стів Стівенсон'],
-  },
-  { key: 'year', title: 'Рік', searchable: true, options: [2026, 2025, 2024, 2023, 2022] },
-  {
-    key: 'publisher',
-    title: 'Видавництво',
-    searchable: true,
-    options: ['Ранок', 'Vivat', 'BookChef', 'АССА', 'А-ба-ба-га-ла-ма-га'],
-  },
-  { key: 'binding', title: 'Палітурка', options: ['Тверда', 'М’яка'] },
-];
 
 export const COLLECTIONS = [
   { name: 'Українська символіка', color: '#b9d7a8' },

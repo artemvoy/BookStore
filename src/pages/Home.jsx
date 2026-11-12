@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import BookCard from '../components/BookCard.jsx';
+import assetUrl from '../assetUrl.js';
 import BookCover from '../components/BookCover.jsx';
 import SectionHeader from '../components/SectionHeader.jsx';
 import { ChevronRight, PlusIcon } from '../components/icons.jsx';
-import { BANNER_BOOKS, BOOKS, COLLECTIONS, FAQ, HERO_SLIDES, PROMOS } from '../data/shop.js';
+import { getBooks } from '../api.js';
+import { BANNER_BOOKS, COLLECTIONS, FAQ, HERO_SLIDES, PROMOS } from '../data/shop.js';
 
 function Hero() {
   const [index, setIndex] = useState(0);
@@ -49,6 +51,7 @@ function Hero() {
 }
 
 function BookRow({ title, books, glow = false }) {
+  if (books.length === 0) return null;
   return (
     <section className={`section${glow ? ' section--glow' : ''}`}>
       <div className="container">
@@ -70,7 +73,7 @@ function RomanceBanner() {
         <div className="feature-banner feature-banner--romance">
           <h2 className="feature-title">Романи — книги, які змушують серце битися частіше</h2>
           <div className="feature-books">
-            <img src="/books/romance-banner.png" alt="Ліз Томфорд — «Підіграй мені» та «Вище неба»" />
+            <img src={assetUrl('/books/romance-banner.png')} alt="Ліз Томфорд — «Підіграй мені» та «Вище неба»" />
             {/* Sits exactly over the button drawn into the image so it stays clickable. */}
             <Link to="/catalog/adult" className="pill-light">
               Усі добірки <ChevronRight size={14} />
@@ -126,14 +129,15 @@ function Promos() {
   );
 }
 
-function NewYear() {
+function NewYear({ books }) {
+  if (books.length === 0) return null;
   return (
     <section className="section">
       <div className="container">
         <SectionHeader title="Новорічні" />
         <div className="book-row book-row--featured">
           <div className="featured-image" aria-hidden="true" />
-          {BOOKS.slice(20, 23).map((book) => (
+          {books.map((book) => (
             <BookCard key={book.id} book={book} />
           ))}
         </div>
@@ -151,7 +155,7 @@ function AuthorBanner() {
             <p className="feature-kicker">У продажу з 15 серпня</p>
             <h2 className="feature-title">«Останній лист» про любов, що живе попри все</h2>
             <div className="author-quote">
-              <img className="author-avatar" src="/authors/rebecca-yarros.png" alt="" />
+              <img className="author-avatar" src={assetUrl('/authors/rebecca-yarros.png')} alt="" />
               <div>
                 <p>Привіт, я Ребекка Яррос.</p>
                 <p>
@@ -203,17 +207,26 @@ function Faq() {
 }
 
 export default function Home() {
+  // One request fills every row on the page; the API's default order is newest first.
+  const [books, setBooks] = useState([]);
+
+  useEffect(() => {
+    getBooks({ pageSize: 18 })
+      .then((data) => setBooks(data.items))
+      .catch(() => setBooks([]));
+  }, []);
+
   return (
     <>
       <Hero />
-      <BookRow title="Новинки" books={BOOKS.slice(0, 5)} glow />
+      <BookRow title="Новинки" books={books.slice(0, 5)} glow />
       <RomanceBanner />
       <Collections />
       <Promos />
-      <BookRow title="Хіт продажу" books={BOOKS.slice(5, 10)} />
-      <NewYear />
+      <BookRow title="Хіт продажу" books={books.slice(5, 10)} />
+      <NewYear books={books.slice(15, 18)} />
       <AuthorBanner />
-      <BookRow title="Анонси" books={BOOKS.slice(10, 15)} />
+      <BookRow title="Анонси" books={books.slice(10, 15)} />
       <Faq />
     </>
   );

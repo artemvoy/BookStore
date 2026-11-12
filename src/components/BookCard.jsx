@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { Link, useOutletContext } from 'react-router-dom';
 import BookCover from './BookCover.jsx';
 import { CartIcon, HeartIcon, StarIcon } from './icons.jsx';
 
@@ -20,21 +20,27 @@ export default function BookCard({ book }) {
         >
           <HeartIcon size={16} />
         </button>
-        <BookCover book={book} />
+        <Link to={`/book/${book.id}`} tabIndex={-1} aria-hidden="true">
+          <BookCover book={book} />
+        </Link>
       </div>
 
-      <div className="book-card-meta">
-        <span className="book-card-rating">
-          <StarIcon /> {book.rating}
-        </span>
-        <span>{book.reviews} оцінки</span>
-      </div>
-      <h3 className="book-card-title">{book.title}</h3>
+      {book.rating && (
+        <div className="book-card-meta">
+          <span className="book-card-rating">
+            <StarIcon /> {book.rating}
+          </span>
+          <span>{book.reviews} оцінки</span>
+        </div>
+      )}
+      <h3 className="book-card-title">
+        <Link to={`/book/${book.id}`}>{book.title}</Link>
+      </h3>
       <p className="book-card-author">{book.author}</p>
 
       <div className="book-card-bottom">
         <div className="book-card-price">
-          <s>{book.oldPrice} грн</s>
+          {book.oldPrice && <s>{book.oldPrice} грн</s>}
           <strong>{book.price} грн</strong>
         </div>
         <button

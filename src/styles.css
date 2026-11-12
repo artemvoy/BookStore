@@ -210,6 +210,13 @@ body {
   transition: background 0.15s;
 }
 
+a.btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
 .btn:hover:not(:disabled) {
   background: var(--color-primary-hover);
 }

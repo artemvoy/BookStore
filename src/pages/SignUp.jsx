@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { isLoggedIn, register } from '../api.js';
 import AuthModal from '../components/AuthModal.jsx';
 import Logo from '../components/Logo.jsx';
 import TextField from '../components/TextField.jsx';
@@ -20,18 +21,42 @@ function validate(form) {
 export default function SignUp() {
   const [form, setForm] = useState(EMPTY);
   const [errors, setErrors] = useState({});
+  const [serverError, setServerError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const navigate = useNavigate();
 
   const update = (name) => (e) => {
     setForm((f) => ({ ...f, [name]: e.target.value }));
     setErrors((errs) => ({ ...errs, [name]: undefined }));
+    setServerError('');
   };
 
   const filled = Object.values(form).every((v) => v.trim() !== '');
   const hasErrors = Object.values(errors).some(Boolean);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    setErrors(validate(form));
+    const found = validate(form);
+    setErrors(found);
+    if (Object.keys(found).length > 0) return;
+
+    setSubmitting(true);
+    setServerError('');
+    try {
+      const result = await register({
+        email: form.email.trim(),
+        password: form.password,
+        firstName: form.firstName.trim(),
+        lastName: form.lastName.trim(),
+      });
+      // Account created either way; if the name wasn't saved, the profile page lets the user add it.
+      if (result.complete) navigate('/');
+      else navigate(isLoggedIn() ? '/profile' : '/sign-in');
+    } catch (err) {
+      setServerError(err.status === 400 ? 'Користувач з таким email вже існує' : err.message);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -92,8 +117,13 @@ export default function SignUp() {
         </div>
 
         <div className="auth-actions">
-          <button type="submit" className="btn" disabled={!filled || hasErrors}>
-            Зареєструватись
+          {serverError && (
+            <p className="field-error" role="alert">
+              {serverError}
+            </p>
+          )}
+          <button type="submit" className="btn" disabled={!filled || hasErrors || submitting}>
+            {submitting ? 'Реєстрація…' : 'Зареєструватись'}
           </button>
           <p className="auth-switch">
             Вже є акаунт? <Link to="/sign-in">Увійти</Link>

@@ -1,20 +1,24 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import BookCard from '../components/BookCard.jsx';
-import { ChevronDown, ChevronRight, CloseIcon, FilterIcon, RefreshIcon, SearchIcon } from '../components/icons.jsx';
-import { BOOKS, CATEGORIES, FILTERS as GROUPS } from '../data/shop.js';
+import Pagination from '../components/Pagination.jsx';
+import { ChevronDown, ChevronRight, CloseIcon, FilterIcon, SearchIcon } from '../components/icons.jsx';
+import { getAuthors, getBooks } from '../api.js';
+import useCategories from '../useCategories.js';
 
 const PRICE_MIN = 0;
 const PRICE_MAX = 10000;
 const PAGE_SIZE = 12;
+// `sortBy` values understood by GET /api/books; without one it returns newest first.
 const SORTS = [
-  { id: 'popular', label: 'За популярністю' },
-  { id: 'cheap', label: 'Від дешевих' },
-  { id: 'expensive', label: 'Від дорогих' },
   { id: 'new', label: 'Новинки' },
+  { id: 'cheap', label: 'Від дешевих', sortBy: 'price_asc' },
+  { id: 'expensive', label: 'Від дорогих', sortBy: 'price_desc' },
+  { id: 'title', label: 'За назвою', sortBy: 'title' },
 ];
 
-const emptyChecks = () => Object.fromEntries(GROUPS.map((g) => [g.key, []]));
+// Every filter lives in the URL (?q=&author=&min=&max=&sort=&page=) so links and the back button keep it.
+const FILTER_KEYS = ['author', 'min', 'max'];
 
 function FilterSection({ title, children }) {
   const [open, setOpen] = useState(true);
@@ -29,33 +33,58 @@ function FilterSection({ title, children }) {
   );
 }
 
-function CheckboxGroup({ group, selected, onToggle }) {
+function CategoryList({ categories, activeSlug, search }) {
+  const suffix = search ? `?q=${encodeURIComponent(search)}` : '';
+  return (
+    <ul className="filter-options">
+      <li>
+        <Link to={`/catalog${suffix}`} className={`filter-link${activeSlug ? '' : ' is-active'}`}>
+          Усі книги
+        </Link>
+      </li>
+      {categories.map((c) => (
+        <li key={c.slug}>
+          <Link
+            to={`/catalog/${c.slug}${suffix}`}
+            className={`filter-link${c.slug === activeSlug ? ' is-active' : ''}`}
+            aria-current={c.slug === activeSlug ? 'page' : undefined}
+          >
+            {c.name}
+          </Link>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function AuthorFilter({ authors, selected, onSelect }) {
   const [search, setSearch] = useState('');
-  const options = group.options.filter((o) => String(o).toLowerCase().includes(search.trim().toLowerCase()));
+  const term = search.trim().toLowerCase();
+  const options = authors.filter((a) => a.name.toLowerCase().includes(term));
 
   return (
     <>
-      {group.searchable && (
-        <label className="filter-search">
-          <SearchIcon size={14} />
-          <input
-            placeholder="Пошук"
-            aria-label={`Пошук: ${group.title}`}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </label>
-      )}
-      <ul className={`filter-options${group.searchable ? ' filter-options--scroll' : ''}`}>
-        {options.map((option) => (
-          <li key={option}>
+      <label className="filter-search">
+        <SearchIcon size={14} />
+        <input placeholder="Пошук" aria-label="Пошук автора" value={search} onChange={(e) => setSearch(e.target.value)} />
+      </label>
+      <ul className="filter-options filter-options--scroll">
+        <li>
+          <label className="checkbox">
+            <input type="radio" name="author" checked={!selected} onChange={() => onSelect('')} />
+            Усі автори
+          </label>
+        </li>
+        {options.map((a) => (
+          <li key={a.id}>
             <label className="checkbox">
               <input
-                type="checkbox"
-                checked={selected.includes(option)}
-                onChange={() => onToggle(group.key, option)}
+                type="radio"
+                name="author"
+                checked={selected === String(a.id)}
+                onChange={() => onSelect(String(a.id))}
               />
-              {option}
+              {a.name}
             </label>
           </li>
         ))}
@@ -67,7 +96,7 @@ function CheckboxGroup({ group, selected, onToggle }) {
 
 function PriceFilter({ value, onApply }) {
   const [draft, setDraft] = useState(value);
-  useEffect(() => setDraft(value), [value]);
+  useEffect(() => setDraft(value), [value[0], value[1]]);
 
   const set = (i) => (e) => {
     const n = Math.min(PRICE_MAX, Math.max(PRICE_MIN, Number(e.target.value) || 0));
@@ -88,10 +117,7 @@ function PriceFilter({ value, onApply }) {
           <input type="number" min={PRICE_MIN} max={PRICE_MAX} value={draft[1]} onChange={set(1)} />
         </label>
       </div>
-      <div
-        className="range"
-        style={{ '--from': `${pct(draft[0])}%`, '--to': `${pct(draft[1])}%` }}
-      >
+      <div className="range" style={{ '--from': `${pct(draft[0])}%`, '--to': `${pct(draft[1])}%` }}>
         <input
           type="range"
           min={PRICE_MIN}
@@ -120,7 +146,7 @@ function PriceFilter({ value, onApply }) {
 
 function SortSelect({ value, onChange }) {
   const [open, setOpen] = useState(false);
-  const current = SORTS.find((s) => s.id === value);
+  const current = SORTS.find((s) => s.id === value) ?? SORTS[0];
   return (
     <div className="sort" onBlur={(e) => !e.currentTarget.contains(e.relatedTarget) && setOpen(false)}>
       <button type="button" className="sort-toggle" aria-haspopup="listbox" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
@@ -134,7 +160,7 @@ function SortSelect({ value, onChange }) {
               <button
                 type="button"
                 role="option"
-                aria-selected={s.id === value}
+                aria-selected={s.id === current.id}
                 onClick={() => {
                   onChange(s.id);
                   setOpen(false);
@@ -151,39 +177,77 @@ function SortSelect({ value, onChange }) {
 }
 
 export default function Catalog() {
-  const { slug = 'youth' } = useParams();
-  const [params] = useSearchParams();
+  const { slug } = useParams();
+  const [params, setParams] = useSearchParams();
+  const categories = useCategories();
+  const category = categories.find((c) => c.slug === slug);
+  // Only backend categories have numeric ids; anything else shows the whole catalog.
+  const categoryId = /^\d+$/.test(slug ?? '') ? slug : undefined;
+
   const query = params.get('q')?.trim() ?? '';
-  const category = CATEGORIES.find((c) => c.slug === slug) ?? CATEGORIES[3];
+  const authorId = params.get('author') ?? '';
+  const minPrice = Number(params.get('min')) || PRICE_MIN;
+  const maxPrice = Number(params.get('max')) || PRICE_MAX;
+  const sort = params.get('sort') ?? 'new';
+  const page = Math.max(1, Number(params.get('page')) || 1);
 
-  const [price, setPrice] = useState([PRICE_MIN, PRICE_MAX]);
-  const [checks, setChecks] = useState(emptyChecks);
-  const [sort, setSort] = useState('popular');
-  const [visible, setVisible] = useState(PAGE_SIZE);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [authors, setAuthors] = useState([]);
+  const [result, setResult] = useState({ items: [], totalItems: 0, totalPages: 0 });
+  const [status, setStatus] = useState('loading');
 
-  // Start fresh whenever the user lands on another category or search.
   useEffect(() => {
-    setPrice([PRICE_MIN, PRICE_MAX]);
-    setChecks(emptyChecks());
-    setVisible(PAGE_SIZE);
-  }, [slug, query]);
+    getAuthors()
+      .then((list) => setAuthors(list.map((a) => ({ id: a.id, name: `${a.firstName} ${a.lastName}`.trim() }))))
+      .catch(() => setAuthors([]));
+  }, []);
 
-  const toggle = (key, option) => {
-    setChecks((c) => ({
-      ...c,
-      [key]: c[key].includes(option) ? c[key].filter((o) => o !== option) : [...c[key], option],
-    }));
-    setVisible(PAGE_SIZE);
+  useEffect(() => {
+    let alive = true;
+    setStatus('loading');
+    getBooks({
+      categoryId,
+      authorId,
+      searchTerm: query,
+      sortBy: SORTS.find((s) => s.id === sort)?.sortBy,
+      minPrice: minPrice > PRICE_MIN ? minPrice : undefined,
+      maxPrice: maxPrice < PRICE_MAX ? maxPrice : undefined,
+      page,
+      pageSize: PAGE_SIZE,
+    })
+      .then((data) => {
+        if (!alive) return;
+        setResult(data);
+        setStatus('ready');
+      })
+      .catch(() => alive && setStatus('error'));
+    return () => {
+      alive = false;
+    };
+  }, [categoryId, authorId, query, sort, minPrice, maxPrice, page]);
+
+  // Changing any filter goes back to page 1; `null` removes the parameter.
+  const setFilters = (changes) => {
+    setParams((prev) => {
+      const next = new URLSearchParams(prev);
+      Object.entries(changes).forEach(([key, value]) => {
+        if (value === null || value === '' || value === undefined) next.delete(key);
+        else next.set(key, value);
+      });
+      if (!('page' in changes)) next.delete('page');
+      return next;
+    });
   };
 
-  const books = useMemo(() => {
-    const q = query.toLowerCase();
-    return BOOKS.filter((b) => !q || b.title.toLowerCase().includes(q) || b.author.toLowerCase().includes(q));
-  }, [query]);
+  const goToPage = (p) => {
+    setFilters({ page: p > 1 ? p : null });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
-  const activeCount = Object.values(checks).flat().length + (price[0] > PRICE_MIN || price[1] < PRICE_MAX ? 1 : 0);
-  const title = query ? `Пошук: «${query}»` : category.name;
+  const priceActive = minPrice > PRICE_MIN || maxPrice < PRICE_MAX;
+  const activeCount = (authorId ? 1 : 0) + (priceActive ? 1 : 0);
+  const title = query ? `Пошук: «${query}»` : category?.name ?? 'Каталог';
+  const { items: books, totalItems: total, totalPages } = result;
 
   return (
     <div className="catalog-page">
@@ -191,22 +255,15 @@ export default function Catalog() {
         <nav className="breadcrumbs" aria-label="Навігація">
           <Link to="/">Головна</Link>
           <ChevronRight size={14} />
+          {query && category ? (
+            <>
+              <Link to={`/catalog/${category.slug}`}>{category.name}</Link>
+              <ChevronRight size={14} />
+            </>
+          ) : null}
           <span aria-current="page">{title}</span>
         </nav>
         <h1 className="page-title">{title}</h1>
-
-        {category.subcategories.length > 0 && !query && (
-          <ul className="subcategories">
-            {category.subcategories.map((sub, i) => (
-              <li key={sub}>
-                <a href="#" className="collection">
-                  <span className={`collection-image collection-image--${i % 5}`} aria-hidden="true" />
-                  {sub}
-                </a>
-              </li>
-            ))}
-          </ul>
-        )}
 
         <div className="catalog-layout">
           <aside className={`filters${filtersOpen ? ' is-open' : ''}`} aria-label="Фільтри">
@@ -217,34 +274,33 @@ export default function Catalog() {
               </button>
             </div>
 
+            <FilterSection title="Категорії">
+              <CategoryList categories={categories.filter((c) => /^\d+$/.test(c.slug))} activeSlug={categoryId} search={query} />
+            </FilterSection>
             <FilterSection title="Ціна">
               <PriceFilter
-                value={price}
-                onApply={(p) => {
-                  setPrice(p);
-                  setVisible(PAGE_SIZE);
-                }}
+                value={[minPrice, maxPrice]}
+                onApply={([min, max]) =>
+                  setFilters({ min: min > PRICE_MIN ? min : null, max: max < PRICE_MAX ? max : null })
+                }
               />
             </FilterSection>
-            {GROUPS.map((group) => (
-              <FilterSection key={group.key} title={group.title}>
-                <CheckboxGroup group={group} selected={checks[group.key]} onToggle={toggle} />
+            {authors.length > 0 && (
+              <FilterSection title="Автор">
+                <AuthorFilter authors={authors} selected={authorId} onSelect={(id) => setFilters({ author: id })} />
               </FilterSection>
-            ))}
+            )}
 
             <div className="filters-foot">
               <button
                 type="button"
                 className="btn-outline-accent btn-block"
-                onClick={() => {
-                  setChecks(emptyChecks());
-                  setPrice([PRICE_MIN, PRICE_MAX]);
-                }}
+                onClick={() => setFilters(Object.fromEntries(FILTER_KEYS.map((k) => [k, null])))}
               >
                 Скинути
               </button>
               <button type="button" className="btn-primary btn-block" onClick={() => setFiltersOpen(false)}>
-                Показати {books.length}
+                Показати {total}
               </button>
             </div>
           </aside>
@@ -256,26 +312,34 @@ export default function Catalog() {
                 <FilterIcon />
                 Фільтри{activeCount > 0 && ` (${activeCount})`}
               </button>
-              <span className="catalog-count">Товарів: {books.length}</span>
-              <SortSelect value={sort} onChange={setSort} />
+              <span className="catalog-count">Товарів: {total}</span>
+              {activeCount > 0 && (
+                <button
+                  type="button"
+                  className="filters-reset"
+                  onClick={() => setFilters(Object.fromEntries(FILTER_KEYS.map((k) => [k, null])))}
+                >
+                  Скинути фільтри
+                </button>
+              )}
+              <SortSelect value={sort} onChange={(id) => setFilters({ sort: id === 'new' ? null : id })} />
             </div>
 
-            {books.length === 0 ? (
+            {status === 'error' ? (
+              <p className="catalog-empty">Не вдалося завантажити книги. Перевірте, чи запущений сервер.</p>
+            ) : status === 'loading' && books.length === 0 ? (
+              <p className="catalog-empty">Завантаження…</p>
+            ) : books.length === 0 ? (
               <p className="catalog-empty">За вашими фільтрами книг не знайдено.</p>
             ) : (
-              <div className="catalog-grid">
-                {books.slice(0, visible).map((book) => (
+              <div className={`catalog-grid${status === 'loading' ? ' is-loading' : ''}`}>
+                {books.map((book) => (
                   <BookCard key={book.id} book={book} />
                 ))}
               </div>
             )}
 
-            {visible < books.length && (
-              <button type="button" className="btn-primary btn-more" onClick={() => setVisible((v) => v + 8)}>
-                <RefreshIcon />
-                Більше
-              </button>
-            )}
+            <Pagination page={page} totalPages={totalPages} onChange={goToPage} />
           </section>
         </div>
       </div>
