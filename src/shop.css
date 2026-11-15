@@ -152,14 +152,16 @@
   color: var(--color-primary);
 }
 
-.brand-name {
-  margin-top: -2px;
-  font-weight: 700;
-  font-size: 16px;
-  letter-spacing: -0.3px;
+.brand--light {
+  color: #fff;
 }
 
-.brand--light {
+/* Set on the svg itself: `.shop a { color: inherit }` outranks `.brand` on the link. */
+.brand svg {
+  color: var(--color-primary);
+}
+
+.brand--light svg {
   color: #fff;
 }
 
