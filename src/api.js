@@ -29,13 +29,15 @@ export const isLoggedIn = () => Boolean(read(ACCESS));
 
 async function send(path, { method = 'GET', body } = {}) {
   const token = read(ACCESS);
+  // FormData (file uploads) sets its own multipart Content-Type.
+  const isForm = body instanceof FormData;
   return fetch(`${BASE}${path}`, {
     method,
     headers: {
-      ...(body && { 'Content-Type': 'application/json' }),
+      ...(body && !isForm && { 'Content-Type': 'application/json' }),
       ...(token && { Authorization: `Bearer ${token}` }),
     },
-    body: body && JSON.stringify(body),
+    body: body && (isForm ? body : JSON.stringify(body)),
   });
 }
 
@@ -60,6 +62,20 @@ async function refresh() {
 
 const UNREACHABLE = 'Сервер недоступний. Перевірте, чи запущений бекенд.';
 
+// The backend answers in English; these are the messages a visitor can actually see.
+const MESSAGES = {
+  'User with this email already exists': 'Користувач з таким email вже існує',
+  'Invalid email or password': 'Невірний email або пароль',
+  'Email is not confirmed': 'Пошту не підтверджено. Перевірте лист у скриньці.',
+  'Invalid or expired confirmation link': 'Посилання недійсне або термін його дії минув',
+  'Email is already confirmed': 'Пошту вже підтверджено',
+  'Invalid or expired reset link': 'Посилання недійсне або термін його дії минув',
+  'Current password is incorrect': 'Поточний пароль невірний',
+  'File is required': 'Оберіть файл',
+  'File size must not exceed 5 MB': 'Файл має бути не більшим за 5 МБ',
+  'Invalid file format. Allowed: jpg, jpeg, png, webp': 'Дозволені формати: jpg, png, webp',
+};
+
 export async function api(path, options) {
   let res;
   try {
@@ -83,7 +99,8 @@ export async function api(path, options) {
     // 5xx bodies from ASP.NET in Development are raw stack traces, not something to show users.
     if (res.status >= 500) throw Object.assign(new Error('Помилка сервера. Спробуйте пізніше.'), { status: res.status });
     // The status code in the fallback tells which case it was (401 = token rejected, 404 = wrong address…).
-    const message = data?.message || data?.title || (typeof data === 'string' && data) || `Помилка сервера (${res.status})`;
+    const raw = data?.message || data?.title || (typeof data === 'string' && data) || `Помилка сервера (${res.status})`;
+    const message = MESSAGES[raw] ?? raw;
     const error = new Error(message);
     error.status = res.status;
     throw error;
@@ -91,27 +108,39 @@ export async function api(path, options) {
   return data;
 }
 
+// Register only takes email and password, and the account can't sign in until the email is confirmed.
+// The names typed at sign-up wait in localStorage and are saved to the profile on the first sign-in.
+const pendingKey = (email) => `pendingProfile:${email.trim().toLowerCase()}`;
+
 export async function login(email, password) {
   saveTokens(await api('/account/login', { method: 'POST', body: { email, password } }));
+
+  let pending = null;
+  try {
+    pending = JSON.parse(localStorage.getItem(pendingKey(email)));
+  } catch {
+    pending = null;
+  }
+  if (pending) {
+    await updateProfile(pending).catch(() => {});
+    localStorage.removeItem(pendingKey(email));
+  }
 }
 
-// Register only takes email and password; names are stored on the profile after signing in.
-// Once the account exists, a failed sign-in or name save is reported but doesn't undo the registration.
 export async function register({ email, password, firstName, lastName }) {
+  await api('/account/register', { method: 'POST', body: { email, password } });
   try {
-    await api('/account/register', { method: 'POST', body: { email, password } });
-  } catch (err) {
-    throw Object.assign(err, { step: 'register' });
-  }
-  try {
-    await login(email, password);
-    await updateProfile({ firstName, lastName });
-    return { complete: true };
-  } catch (err) {
-    console.warn('Account created, but sign-in or saving the name failed:', err);
-    return { complete: false, error: err };
+    localStorage.setItem(pendingKey(email), JSON.stringify({ firstName, lastName }));
+  } catch {
+    // Names are optional; without storage the user can still add them in the profile.
   }
 }
+
+export const confirmEmail = (email, token) =>
+  api('/account/confirm-email', { method: 'POST', body: { email, token } });
+
+export const resendConfirmation = (email) =>
+  api('/account/resend-confirmation', { method: 'POST', body: { email } });
 
 export async function logout() {
   try {
@@ -121,7 +150,20 @@ export async function logout() {
   }
 }
 
-export const getProfile = () => api('/account/me');
+export const getProfile = async () => {
+  const profile = await api('/account/me');
+  return { ...profile, isAdmin: profile.role === 'Admin' };
+};
+
+export async function uploadAvatar(file) {
+  const form = new FormData();
+  form.append('file', file);
+  return api('/account/avatar', { method: 'POST', body: form });
+}
+
+export const deleteAvatar = () => api('/account/avatar', { method: 'DELETE' });
+
+export const subscribe = (email) => api('/newsletter/subscribe', { method: 'POST', body: { email } });
 
 export const updateProfile = (profile) => api('/account/me', { method: 'PUT', body: profile });
 
@@ -142,6 +184,9 @@ export const toBook = (b) => ({
   categoryId: b.categoryId,
   price: b.price,
   stock: b.stockQuantity,
+  // BookCard shows the rating line only for books that have reviews.
+  rating: b.reviewsCount ? b.averageRating.toFixed(1) : null,
+  reviews: b.reviewsCount,
   image: assetUrl(b.coverImageUrl),
   cover: ['#2b1a3d', '#ff2e8a'],
 });
@@ -165,3 +210,48 @@ export const getAuthors = () => api('/authors');
 export const getCart = () => api('/cart');
 
 export const addToCart = (bookId, quantity = 1) => api('/cart', { method: 'POST', body: { bookId, quantity } });
+
+// Setting the quantity to 0 removes the line on the backend.
+export const updateCartItem = (id, quantity) => api(`/cart/${id}`, { method: 'PUT', body: { quantity } });
+
+export const removeCartItem = (id) => api(`/cart/${id}`, { method: 'DELETE' });
+
+// The backend stores the whole delivery/contact block as one ShippingAddress string.
+export const checkout = (shippingAddress) => api('/orders/checkout', { method: 'POST', body: { shippingAddress } });
+
+export const getAuthor = (id) => api(`/authors/${id}`);
+
+export const getReviews = (bookId, page = 1, pageSize = 3) =>
+  api(`/books/${bookId}/reviews?${new URLSearchParams({ page, pageSize })}`);
+
+export const createReview = (bookId, review) => api(`/books/${bookId}/reviews`, { method: 'POST', body: review });
+
+// Bonus coins: every book counts double (the "x2 YOUкоїнів" badge).
+export const coinsFor = (quantity) => quantity * 2;
+
+// Cheapest and dearest book. The whole catalog uses GET /books/price-range; inside a category,
+// author or search the range comes from the first book of the cheapest and dearest sort.
+export async function getPriceRange(filters = {}) {
+  const filtered = Object.values(filters).some((v) => v !== undefined && v !== null && v !== '');
+  if (!filtered) {
+    const { minPrice, maxPrice } = await api('/books/price-range');
+    return maxPrice > 0 ? { min: Math.floor(minPrice), max: Math.ceil(maxPrice) } : null;
+  }
+  const [cheap, dear] = await Promise.all([
+    getBooks({ ...filters, sortBy: 'price_asc', pageSize: 1 }),
+    getBooks({ ...filters, sortBy: 'price_desc', pageSize: 1 }),
+  ]);
+  if (cheap.items.length === 0) return null;
+  return { min: Math.floor(cheap.items[0].price), max: Math.ceil(dear.items[0].price) };
+}
+
+// Admin: catalog editing (the backend allows these only for users whose role is Admin).
+const crud = (resource) => ({
+  create: (data) => api(`/${resource}`, { method: 'POST', body: data }),
+  update: (id, data) => api(`/${resource}/${id}`, { method: 'PUT', body: data }),
+  remove: (id) => api(`/${resource}/${id}`, { method: 'DELETE' }),
+});
+
+export const adminBooks = crud('books');
+export const adminCategories = crud('categories');
+export const adminAuthors = crud('authors');

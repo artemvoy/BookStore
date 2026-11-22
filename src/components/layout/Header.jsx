@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import BrandLogo from './BrandLogo.jsx';
 import { NAV_LINKS } from '../../data/shop.js';
 import useAuth from '../../useAuth.js';
+import useProfile from '../../useProfile.js';
 import useCategories from '../../useCategories.js';
 import { CartIcon, ChevronRight, HeartIcon, MenuIcon, PhoneIcon, SearchIcon, UserIcon } from '../icons.jsx';
 
@@ -50,6 +51,14 @@ export default function Header({ cartCount = 0 }) {
   const menuRef = useRef(null);
   const navigate = useNavigate();
   const loggedIn = useAuth();
+  const profile = useProfile();
+  const location = useLocation();
+
+  // Keep the box showing the search the catalog is displaying (and empty it elsewhere).
+  useEffect(() => {
+    const q = location.pathname.startsWith('/catalog') ? new URLSearchParams(location.search).get('q') : '';
+    setQuery(q ?? '');
+  }, [location.pathname, location.search]);
 
   useEffect(() => {
     if (!menuOpen) return undefined;
@@ -109,16 +118,21 @@ export default function Header({ cartCount = 0 }) {
         </div>
 
         <div className="header-actions">
+          {profile?.isAdmin && (
+            <Link to="/admin" className="header-admin">
+              Адмін
+            </Link>
+          )}
           <Link to={loggedIn ? '/profile' : '/sign-in'} className="icon-btn" aria-label="Особистий кабінет">
-            <UserIcon />
+            {profile?.avatarUrl ? <img className="header-avatar" src={profile.avatarUrl} alt="" /> : <UserIcon />}
           </Link>
           <button type="button" className="icon-btn" aria-label="Обране">
             <HeartIcon />
           </button>
-          <button type="button" className="icon-btn" aria-label={`Кошик, товарів: ${cartCount}`}>
+          <Link to="/cart" className="icon-btn" aria-label={`Кошик, товарів: ${cartCount}`}>
             <CartIcon />
             <span className="icon-btn-badge">{cartCount}</span>
-          </button>
+          </Link>
         </div>
       </div>
 

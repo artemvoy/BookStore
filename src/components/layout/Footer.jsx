@@ -11,24 +11,37 @@ import {
   YoutubeIcon,
 } from '../icons.jsx';
 import { EMAIL_RE } from '../../validation.js';
+import { subscribe } from '../../api.js';
+import LogoMark from '../LogoMark.jsx';
+import Modal from '../Modal.jsx';
 
 function Subscribe() {
   const [form, setForm] = useState({ name: '', email: '' });
+  // { type: 'error' | 'pending', text } for the line under the form; thanks opens the dialog.
   const [status, setStatus] = useState(null);
+  const [thanks, setThanks] = useState(null);
 
   const update = (name) => (e) => {
     setForm((f) => ({ ...f, [name]: e.target.value }));
     setStatus(null);
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!EMAIL_RE.test(form.email.trim())) {
-      setStatus('error');
+      setStatus({ type: 'error', text: 'Невірний формат email' });
       return;
     }
-    setStatus('ok');
-    setForm({ name: '', email: '' });
+    setStatus({ type: 'pending' });
+    try {
+      const { message } = await subscribe(form.email.trim());
+      // The backend answers 200 both for a new and an existing subscription.
+      setThanks(/already/i.test(message ?? '') ? 'already' : 'new');
+      setStatus(null);
+      setForm({ name: '', email: '' });
+    } catch (err) {
+      setStatus({ type: 'error', text: err.message });
+    }
   };
 
   return (
@@ -46,20 +59,39 @@ function Subscribe() {
             type="email"
             placeholder="Ваш email"
             aria-label="Ваш email"
-            className={status === 'error' ? 'is-invalid' : undefined}
+            className={status?.type === 'error' ? 'is-invalid' : undefined}
             value={form.email}
             onChange={update('email')}
           />
-          <button type="submit" className="btn-accent">
-            Підписатися
+          <button type="submit" className="btn-accent" disabled={status?.type === 'pending'}>
+            {status?.type === 'pending' ? 'Підписуємо…' : 'Підписатися'}
           </button>
-          {status && (
-            <p className={`subscribe-status subscribe-status--${status}`} role="status">
-              {status === 'ok' ? 'Дякуємо! Ви підписані.' : 'Невірний формат email'}
+          {status?.text && (
+            <p className="subscribe-status subscribe-status--error" role="alert">
+              {status.text}
             </p>
           )}
         </form>
       </div>
+      {thanks && (
+        <Modal label="Дякуємо за підписку" onClose={() => setThanks(null)}>
+          <div className="modal-thanks">
+            <LogoMark width={56} withText={false} className="modal-logo" />
+            <h2 className="auth-title auth-title--upper">Дякуємо!</h2>
+            <p className="auth-subtitle auth-subtitle--small">
+              {thanks === 'already'
+                ? 'Цей email вже підписаний на нашу розсилку.'
+                : 'Ви підписалися на новини, книжкові добірки та секретні промокоди.'}
+            </p>
+            <span className="modal-check" aria-hidden="true">
+              ✓
+            </span>
+            <button type="button" className="btn" onClick={() => setThanks(null)}>
+              Закрити
+            </button>
+          </div>
+        </Modal>
+      )}
     </section>
   );
 }

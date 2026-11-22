@@ -3,11 +3,11 @@ import { Link, useParams, useSearchParams } from 'react-router-dom';
 import BookCard from '../components/BookCard.jsx';
 import Pagination from '../components/Pagination.jsx';
 import { ChevronDown, ChevronRight, CloseIcon, FilterIcon, SearchIcon } from '../components/icons.jsx';
-import { getAuthors, getBooks } from '../api.js';
+import { getAuthors, getBooks, getPriceRange } from '../api.js';
 import useCategories from '../useCategories.js';
 
-const PRICE_MIN = 0;
-const PRICE_MAX = 10000;
+// Slider limits until the real cheapest/dearest prices arrive from the API.
+const DEFAULT_BOUNDS = { min: 0, max: 10000 };
 const PAGE_SIZE = 12;
 // `sortBy` values understood by GET /api/books; without one it returns newest first.
 const SORTS = [
@@ -94,50 +94,56 @@ function AuthorFilter({ authors, selected, onSelect }) {
   );
 }
 
-function PriceFilter({ value, onApply }) {
-  const [draft, setDraft] = useState(value);
-  useEffect(() => setDraft(value), [value[0], value[1]]);
+function PriceFilter({ value, bounds, onApply }) {
+  const { min, max } = bounds;
+  // Text the user is typing; it is clamped to the price range only on blur or apply.
+  const [draft, setDraft] = useState(value.map(String));
+  useEffect(() => setDraft(value.map(String)), [value[0], value[1]]);
 
-  const set = (i) => (e) => {
-    const n = Math.min(PRICE_MAX, Math.max(PRICE_MIN, Number(e.target.value) || 0));
-    setDraft((d) => (i === 0 ? [Math.min(n, d[1]), d[1]] : [d[0], Math.max(n, d[0])]));
+  const clamp = (n) => Math.min(max, Math.max(min, Number.isFinite(n) ? n : min));
+  const normalize = ([from, to]) => {
+    const a = clamp(Number(from || min));
+    const b = clamp(Number(to || max));
+    return a <= b ? [a, b] : [b, a];
   };
 
-  const pct = (n) => ((n - PRICE_MIN) / (PRICE_MAX - PRICE_MIN)) * 100;
+  const [from, to] = normalize(draft);
+  const pct = (n) => ((n - min) / (max - min || 1)) * 100;
+
+  const type = (i) => (e) => setDraft((d) => (i === 0 ? [e.target.value, d[1]] : [d[0], e.target.value]));
+  const slide = (i) => (e) => {
+    const n = Number(e.target.value);
+    setDraft(() => (i === 0 ? [String(Math.min(n, to)), String(to)] : [String(from), String(Math.max(n, from))]));
+  };
+  const tidy = () => setDraft(normalize(draft).map(String));
 
   return (
     <div className="price-filter">
       <div className="price-inputs">
         <label>
           Від
-          <input type="number" min={PRICE_MIN} max={PRICE_MAX} value={draft[0]} onChange={set(0)} />
+          <input type="number" min={min} max={max} value={draft[0]} onChange={type(0)} onBlur={tidy} />
         </label>
         <label>
           До
-          <input type="number" min={PRICE_MIN} max={PRICE_MAX} value={draft[1]} onChange={set(1)} />
+          <input type="number" min={min} max={max} value={draft[1]} onChange={type(1)} onBlur={tidy} />
         </label>
       </div>
-      <div className="range" style={{ '--from': `${pct(draft[0])}%`, '--to': `${pct(draft[1])}%` }}>
-        <input
-          type="range"
-          min={PRICE_MIN}
-          max={PRICE_MAX}
-          step={10}
-          value={draft[0]}
-          aria-label="Мінімальна ціна"
-          onChange={set(0)}
-        />
-        <input
-          type="range"
-          min={PRICE_MIN}
-          max={PRICE_MAX}
-          step={10}
-          value={draft[1]}
-          aria-label="Максимальна ціна"
-          onChange={set(1)}
-        />
+      <div className="range" style={{ '--from': `${pct(from)}%`, '--to': `${pct(to)}%` }}>
+        <input type="range" min={min} max={max} step={1} value={from} aria-label="Мінімальна ціна" onChange={slide(0)} />
+        <input type="range" min={min} max={max} step={1} value={to} aria-label="Максимальна ціна" onChange={slide(1)} />
       </div>
-      <button type="button" className="btn-primary btn-block" onClick={() => onApply(draft)}>
+      <p className="price-bounds">
+        {min}–{max} грн
+      </p>
+      <button
+        type="button"
+        className="btn-primary btn-block"
+        onClick={() => {
+          tidy();
+          onApply([from, to]);
+        }}
+      >
         Застосувати
       </button>
     </div>
@@ -186,8 +192,11 @@ export default function Catalog() {
 
   const query = params.get('q')?.trim() ?? '';
   const authorId = params.get('author') ?? '';
-  const minPrice = Number(params.get('min')) || PRICE_MIN;
-  const maxPrice = Number(params.get('max')) || PRICE_MAX;
+  const [bounds, setBounds] = useState(DEFAULT_BOUNDS);
+  const clamp = (n) => Math.min(bounds.max, Math.max(bounds.min, n));
+  // Only a limit narrower than the real price range filters anything.
+  const minPrice = clamp(Number(params.get('min')) || bounds.min);
+  const maxPrice = clamp(Number(params.get('max')) || bounds.max);
   const sort = params.get('sort') ?? 'new';
   const page = Math.max(1, Number(params.get('page')) || 1);
 
@@ -202,6 +211,17 @@ export default function Catalog() {
       .catch(() => setAuthors([]));
   }, []);
 
+  // The slider spans the cheapest to the dearest book among the current category, author and search.
+  useEffect(() => {
+    let alive = true;
+    getPriceRange({ categoryId, authorId, searchTerm: query })
+      .then((range) => alive && range && setBounds(range))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [categoryId, authorId, query]);
+
   useEffect(() => {
     let alive = true;
     setStatus('loading');
@@ -210,8 +230,8 @@ export default function Catalog() {
       authorId,
       searchTerm: query,
       sortBy: SORTS.find((s) => s.id === sort)?.sortBy,
-      minPrice: minPrice > PRICE_MIN ? minPrice : undefined,
-      maxPrice: maxPrice < PRICE_MAX ? maxPrice : undefined,
+      minPrice: minPrice > bounds.min ? minPrice : undefined,
+      maxPrice: maxPrice < bounds.max ? maxPrice : undefined,
       page,
       pageSize: PAGE_SIZE,
     })
@@ -244,7 +264,7 @@ export default function Catalog() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const priceActive = minPrice > PRICE_MIN || maxPrice < PRICE_MAX;
+  const priceActive = minPrice > bounds.min || maxPrice < bounds.max;
   const activeCount = (authorId ? 1 : 0) + (priceActive ? 1 : 0);
   const title = query ? `Пошук: «${query}»` : category?.name ?? 'Каталог';
   const { items: books, totalItems: total, totalPages } = result;
@@ -280,8 +300,9 @@ export default function Catalog() {
             <FilterSection title="Ціна">
               <PriceFilter
                 value={[minPrice, maxPrice]}
+                bounds={bounds}
                 onApply={([min, max]) =>
-                  setFilters({ min: min > PRICE_MIN ? min : null, max: max < PRICE_MAX ? max : null })
+                  setFilters({ min: min > bounds.min ? min : null, max: max < bounds.max ? max : null })
                 }
               />
             </FilterSection>

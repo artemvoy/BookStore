@@ -285,3 +285,41 @@ a.btn {
     gap: 16px;
   }
 }
+
+/* "Надіслати лист ще раз" under sign-up / sign-in / confirm-email */
+.resend {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.resend-button {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--color-primary);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.resend-button:disabled {
+  color: var(--color-disabled);
+  cursor: default;
+}
+
+.resend .form-status {
+  margin: 0;
+  font-size: 14px;
+}
+
+.resend .form-status--ok {
+  color: var(--color-primary);
+}
+
+.resend .form-status--error {
+  color: var(--color-error);
+}

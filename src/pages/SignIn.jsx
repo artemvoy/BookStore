@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { login } from '../api.js';
 import AuthModal from '../components/AuthModal.jsx';
+import ResendConfirmation from '../components/ResendConfirmation.jsx';
 import Logo from '../components/Logo.jsx';
 import TextField from '../components/TextField.jsx';
 import { EMAIL_RE } from '../validation.js';
@@ -10,6 +11,7 @@ export default function SignIn() {
   const [form, setForm] = useState({ email: '', password: '' });
   const [errors, setErrors] = useState({});
   const [serverError, setServerError] = useState('');
+  const [unconfirmed, setUnconfirmed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const navigate = useNavigate();
   // Pages that need an account send the user here with the place to come back to.
@@ -19,6 +21,7 @@ export default function SignIn() {
     setForm((f) => ({ ...f, [name]: e.target.value }));
     setErrors((errs) => ({ ...errs, [name]: undefined }));
     setServerError('');
+    setUnconfirmed(false);
   };
 
   const filled = form.email.trim() && form.password;
@@ -37,6 +40,8 @@ export default function SignIn() {
       navigate(from, { replace: true });
     } catch (err) {
       setServerError(err.status === 401 ? 'Невірний email або пароль' : err.message);
+      // 403 = the account exists but its email isn't confirmed yet
+      setUnconfirmed(err.status === 403);
     } finally {
       setSubmitting(false);
     }
@@ -81,6 +86,7 @@ export default function SignIn() {
               {serverError}
             </p>
           )}
+          {unconfirmed && <ResendConfirmation email={form.email.trim()} />}
           <button type="submit" className="btn" disabled={!filled || hasErrors || submitting}>
             {submitting ? 'Вхід…' : 'Увійти'}
           </button>

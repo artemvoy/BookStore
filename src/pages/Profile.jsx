@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
-import { changePassword, getProfile, logout, updateProfile } from '../api.js';
+import { changePassword, deleteAvatar, getProfile, logout, updateProfile, uploadAvatar } from '../api.js';
 import TextField from '../components/TextField.jsx';
 import { ChevronRight } from '../components/icons.jsx';
 import useAuth from '../useAuth.js';
+import { notifyProfileChange } from '../useProfile.js';
 
 function Status({ status }) {
   if (!status) return null;
@@ -11,6 +12,73 @@ function Status({ status }) {
     <p className={`form-status form-status--${status.type}`} role={status.type === 'error' ? 'alert' : 'status'}>
       {status.text}
     </p>
+  );
+}
+
+const MAX_AVATAR = 5 * 1024 * 1024;
+
+// Photo with "change"/"remove"; the backend stores the file and returns its URL.
+function Avatar({ profile, onChange }) {
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState(null);
+  const initials = [profile.firstName, profile.lastName].map((p) => p?.[0] ?? '').join('') || profile.email[0];
+
+  const handleFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (file.size > MAX_AVATAR) {
+      setStatus({ type: 'error', text: 'Файл має бути не більшим за 5 МБ' });
+      return;
+    }
+    setBusy(true);
+    setStatus(null);
+    try {
+      const { avatarUrl } = await uploadAvatar(file);
+      onChange(avatarUrl);
+    } catch (err) {
+      setStatus({ type: 'error', text: err.message });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleRemove = async () => {
+    setBusy(true);
+    setStatus(null);
+    try {
+      await deleteAvatar();
+      onChange(null);
+    } catch (err) {
+      setStatus({ type: 'error', text: err.message });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="avatar-edit">
+      {profile.avatarUrl ? (
+        <img className="avatar avatar--large" src={profile.avatarUrl} alt="Ваше фото" />
+      ) : (
+        <span className="avatar avatar--large avatar--initials" aria-hidden="true">
+          {initials.toUpperCase()}
+        </span>
+      )}
+      <div className="avatar-edit-actions">
+        <label className={`btn-primary avatar-upload${busy ? ' is-busy' : ''}`}>
+          {busy ? 'Завантаження…' : profile.avatarUrl ? 'Змінити фото' : 'Додати фото'}
+          <input type="file" accept="image/jpeg,image/png,image/webp" disabled={busy} onChange={handleFile} />
+        </label>
+        {profile.avatarUrl && (
+          <button type="button" className="btn-outline-accent" disabled={busy} onClick={handleRemove}>
+            Видалити
+          </button>
+        )}
+        <small className="avatar-hint">JPG, PNG або WEBP, до 5 МБ</small>
+        <Status status={status} />
+      </div>
+    </div>
   );
 }
 
@@ -33,6 +101,7 @@ function PersonalData({ profile, onSaved }) {
     try {
       await updateProfile(next);
       onSaved(next);
+      notifyProfileChange();
       setStatus({ type: 'ok', text: 'Дані збережено' });
     } catch (err) {
       setStatus({ type: 'error', text: err.message });
@@ -44,6 +113,13 @@ function PersonalData({ profile, onSaved }) {
   return (
     <form className="panel" onSubmit={handleSubmit} noValidate>
       <h2 className="panel-title">Особисті дані</h2>
+      <Avatar
+        profile={profile}
+        onChange={(avatarUrl) => {
+          onSaved({ avatarUrl });
+          notifyProfileChange();
+        }}
+      />
       <div className="panel-fields">
         <div className="auth-row">
           <TextField label="Прізвище" autoComplete="family-name" value={form.lastName} onChange={update('lastName')} />
@@ -168,9 +244,16 @@ export default function Profile() {
             <h1 className="page-title">Особистий кабінет</h1>
             {profile && <p className="profile-greeting">Вітаємо{name ? `, ${name}` : ''}!</p>}
           </div>
-          <button type="button" className="btn-outline-accent" onClick={handleLogout}>
-            Вийти
-          </button>
+          <div className="profile-head-actions">
+            {profile?.isAdmin && (
+              <Link to="/admin" className="btn-primary">
+                Панель адміністратора
+              </Link>
+            )}
+            <button type="button" className="btn-outline-accent" onClick={handleLogout}>
+              Вийти
+            </button>
+          </div>
         </div>
 
         {error && <p className="catalog-empty">{error}</p>}

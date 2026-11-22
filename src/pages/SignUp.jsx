@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { isLoggedIn, register } from '../api.js';
+import { Link } from 'react-router-dom';
+import { register } from '../api.js';
 import AuthModal from '../components/AuthModal.jsx';
 import Logo from '../components/Logo.jsx';
+import ResendConfirmation from '../components/ResendConfirmation.jsx';
 import TextField from '../components/TextField.jsx';
 import { EMAIL_RE } from '../validation.js';
 
@@ -23,7 +24,8 @@ export default function SignUp() {
   const [errors, setErrors] = useState({});
   const [serverError, setServerError] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const navigate = useNavigate();
+  // Email the confirmation letter went to; set once the account is created.
+  const [sentTo, setSentTo] = useState('');
 
   const update = (name) => (e) => {
     setForm((f) => ({ ...f, [name]: e.target.value }));
@@ -43,21 +45,41 @@ export default function SignUp() {
     setSubmitting(true);
     setServerError('');
     try {
-      const result = await register({
+      await register({
         email: form.email.trim(),
         password: form.password,
         firstName: form.firstName.trim(),
         lastName: form.lastName.trim(),
       });
-      // Account created either way; if the name wasn't saved, the profile page lets the user add it.
-      if (result.complete) navigate('/');
-      else navigate(isLoggedIn() ? '/profile' : '/sign-in');
+      setSentTo(form.email.trim());
     } catch (err) {
       setServerError(err.status === 400 ? 'Користувач з таким email вже існує' : err.message);
     } finally {
       setSubmitting(false);
     }
   };
+
+  if (sentTo) {
+    return (
+      <AuthModal>
+        <div className="auth-form">
+          <header className="auth-header">
+            <Logo />
+            <h1 className="auth-title auth-title--upper">Підтвердіть пошту</h1>
+            <p className="auth-subtitle auth-subtitle--small">
+              Ми надіслали лист на <strong>{sentTo}</strong>. Перейдіть за посиланням у ньому, щоб активувати акаунт.
+            </p>
+          </header>
+          <div className="auth-actions">
+            <ResendConfirmation email={sentTo} />
+            <Link className="btn" to="/sign-in">
+              Перейти до входу
+            </Link>
+          </div>
+        </div>
+      </AuthModal>
+    );
+  }
 
   return (
     <AuthModal>

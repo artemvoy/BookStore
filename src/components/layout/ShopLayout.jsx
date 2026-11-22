@@ -50,7 +50,7 @@ export default function ShopLayout() {
     <div className="shop">
       <Header cartCount={cartCount} />
       <main>
-        <Outlet context={{ addToCart }} />
+        <Outlet context={{ addToCart, refreshCart: loadCart }} />
       </main>
       <Footer />
     </div>
